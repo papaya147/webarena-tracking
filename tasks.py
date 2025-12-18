@@ -80,9 +80,6 @@ def download():
 
     print(f"Success! Dumped {len(extracted_tasks)} tasks to '{TASK_FILE}'.")
 
-    print("\nPreview:")
-    print(json.dumps(extracted_tasks[:3], indent=2))
-
 
 def detail(id: int):
     with open(TASK_FILE, "r") as file:

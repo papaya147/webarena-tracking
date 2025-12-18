@@ -5,6 +5,7 @@ import time
 from playwright.sync_api import sync_playwright, Page
 import argparse
 import tasks
+import os
 
 
 WEBEVENT_JS_FILE = "./webevent.js"
@@ -52,9 +53,13 @@ def login(page, task):
         print(e)
 
 
+if not os.path.exists(tasks.TASK_FILE):
+    tasks.download()
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--id", type=int, default=0)
 args = parser.parse_args()
+
 
 task_detail = tasks.detail(args.id)
 assert task_detail is not None
