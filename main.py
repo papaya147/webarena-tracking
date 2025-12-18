@@ -1,46 +1,37 @@
+# from event_logger_old import EventLogger
+from interaction_logger import InteractionLogger
 import json
 import time
 from playwright.sync_api import sync_playwright, Page
 import argparse
+import tasks
 
 
-webevent_js_file = "./webevent.js"
-log_file = "./logs.jsonl"
-task_file = "./tasks.json"
+WEBEVENT_JS_FILE = "./webevent.js"
+LOG_FILE = "./logs.jsonl"
+
+logger = InteractionLogger(LOG_FILE)
 
 
-def log_event(event_data):
-    event_data["server_timestamp"] = time.time()
-
-    with open(log_file, "a") as f:
-        f.write(json.dumps(event_data) + "\n")
+def log(event_batch):
+    for event in event_batch:
+        logger.write(event)
 
 
 def inject_js(page: Page):
-    page.expose_function("log_event_py", log_event)
+    page.expose_function("log_event_py", log)
 
-    with open(webevent_js_file, "r") as file:
+    with open(WEBEVENT_JS_FILE, "r") as file:
         page.add_init_script(file.read())
 
     page.on(
         "framenavigated",
-        lambda frame: log_event(
-            {"type": "navigation", "url": frame.url, "title": page.title()}
+        lambda frame: log(
+            [{"type": "navigation", "url": frame.url, "title": page.title()}]
         )
         if frame == page.main_frame
         else None,
     )
-
-
-def task_details(id: int):
-    with open(task_file, "r") as file:
-        tasks = json.load(file)
-
-    for task in tasks:
-        if task["id"] == id:
-            return task
-
-    return "Goal could not be found!"
 
 
 def login(page, task):
@@ -65,25 +56,27 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--id", type=int, default=0)
 args = parser.parse_args()
 
-task = task_details(args.id)
-assert type(task) is not str, task
+task_detail = tasks.detail(args.id)
+assert task_detail is not None
 
-print(task["goal"])
+print(task_detail["goal"])
 input("Press anything to continue...")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=False)
-    context = browser.new_context(viewport={"width": 1640, "height": 1024})
+    context = browser.new_context(viewport={"width": 1200, "height": 800})
 
     context.on("page", inject_js)
 
     page = context.new_page()
 
-    login(page, task)
+    login(page, task_detail)
 
-    print(f"Tracking started. Saving to {log_file}")
+    print(f"Tracking started. Saving to {LOG_FILE}")
     print("Navigate, Scroll, Type, Click. (Press Ctrl+C to stop)")
 
-    page.goto(task["domain_detail"]["start_url"])
+    page.goto(task_detail["domain_detail"]["start_url"])
 
     page.wait_for_timeout(99999999)
+
+logger.close()

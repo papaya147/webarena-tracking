@@ -1,123 +1,142 @@
+const BATCH_INTERVAL_MS = 500;
+const MAX_BATCH_SIZE = 50;
+
+const EVENT_CONFIG = {
+  mousemove: { capture: true },
+  scroll: { capture: true },
+  resize: { capture: true },
+  click: { capture: true },
+  keydown: { capture: true },
+  input: { capture: true },
+  change: { capture: true },
+  submit: { capture: true },
+  paste: { capture: true },
+};
+
+let eventBuffer = [];
+let batchTimer = null;
+
 window.recordEvent = (data) => {
   if (window.log_event_py) {
-    data = {
-      ...data,
-      url: window.location.href,
-      title: document.title,
-      viewport: { w: window.innerWidth, h: window.innerHeight },
-    };
     window.log_event_py(data);
   }
 };
 
-const getModifiers = (e) => ({
-  ctrl: e.ctrlKey,
-  alt: e.altKey,
-  shift: e.shiftKey,
-  cmd: e.metaKey,
-});
+const flushBuffer = () => {
+  if (eventBuffer.length === 0) return;
 
-window.addEventListener(
-  "keydown",
-  (e) => {
-    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+  window.recordEvent([...eventBuffer]);
 
-    let parts = [];
-    if (e.ctrlKey) parts.push("Ctrl");
-    if (e.altKey) parts.push("Alt");
-    if (e.shiftKey) parts.push("Shift");
-    if (e.metaKey) parts.push("Cmd");
+  eventBuffer = [];
+  clearTimeout(batchTimer);
+  batchTimer = null;
+};
 
-    parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+const queueEvent = (eventData) => {
+  eventBuffer.push(eventData);
 
-    window.recordEvent({
-      type: "keydown",
-      key: e.key,
-      code: e.code,
-      combo: parts.join("+"),
-      modifiers: getModifiers(e),
-    });
-  },
-  { capture: true }
-);
-
-window.addEventListener(
-  "click",
-  (e) => {
-    window.recordEvent({
-      type: "click",
-      x: e.clientX,
-      y: e.clientY,
-      pageX: e.pageX,
-      pageY: e.pageY,
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
-      modifiers: getModifiers(e),
-      target_tag: e.target.tagName,
-      target_id: e.target.id,
-      target_text: e.target.innerText
-        ? e.target.innerText.substring(0, 50)
-        : "",
-    });
-  },
-  { capture: true }
-);
-
-let scrollBuffer = [];
-
-let lastX = window.scrollX;
-let lastY = window.scrollY;
-
-function trackScroll() {
-  const currX = window.scrollX;
-  const currY = window.scrollY;
-
-  if (currX !== lastX || currY !== lastY) {
-    scrollBuffer.push({
-      t: Date.now(),
-      x: currX,
-      y: currY,
-    });
-    lastX = currX;
-    lastY = currY;
+  if (eventBuffer.length >= MAX_BATCH_SIZE) {
+    flushBuffer();
+  } else if (!batchTimer) {
+    batchTimer = setTimeout(flushBuffer, BATCH_INTERVAL_MS);
   }
-  requestAnimationFrame(trackScroll);
-}
-requestAnimationFrame(trackScroll);
+};
 
-setInterval(() => {
-  if (scrollBuffer.length > 0) {
-    window.recordEvent({
-      type: "scroll_batch",
-      samples: scrollBuffer,
-    });
-    scrollBuffer = [];
+const getXPath = (element) => {
+  if (!element || element.nodeType !== 1) return "";
+  if (element.id) return `//*[@id="${element.id}"]`;
+
+  const parts = [];
+  while (element && element.nodeType === 1) {
+    let index = 0;
+    let sibling = element.previousSibling;
+    while (sibling) {
+      if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+        index++;
+      }
+      sibling = sibling.previousSibling;
+    }
+    const tagName = element.tagName.toLowerCase();
+    const pathIndex = index > 0 ? `[${index + 1}]` : "";
+    parts.unshift(`${tagName}${pathIndex}`);
+    element = element.parentNode;
   }
-}, 50);
+  return parts.length ? "/" + parts.join("/") : "";
+};
 
-let hoverTimer;
-window.addEventListener(
-  "mouseover",
-  (e) => {
-    const t = e.target;
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(() => {
-      window.recordEvent({
-        type: "hover",
-        x: e.clientX,
-        y: e.clientY,
-        target_tag: t.tagName,
-        target_text: t.innerText ? t.innerText.substring(0, 30) : "",
-      });
-    }, 500);
-  },
-  { capture: true }
-);
+Object.keys(EVENT_CONFIG).forEach((eventType) => {
+  const config = EVENT_CONFIG[eventType];
 
-window.addEventListener("mouseout", () => clearTimeout(hoverTimer), {
-  capture: true,
+  window.addEventListener(
+    eventType,
+    (e) => {
+      const path = e.composedPath ? e.composedPath() : [];
+      const trueTarget = path[0] || e.target;
+      const targetElement =
+        trueTarget instanceof Element ? trueTarget : trueTarget.parentElement;
+
+      let cursor = "auto";
+      if (targetElement) {
+        try {
+          cursor = window.getComputedStyle(targetElement).cursor;
+        } catch (err) {}
+      }
+
+      const baseData = {
+        type: eventType,
+        url: window.location.href,
+        title: document.title,
+        client_timestamp: Date.now(),
+        cursor: cursor,
+        target_tag: targetElement ? targetElement.tagName : "",
+        target_id: targetElement ? targetElement.id : "",
+        target_xpath: getXPath(targetElement),
+      };
+
+      let extraData = {};
+      if (e.type === "click" || e.type === "mousemove") {
+        extraData = { x: e.clientX, y: e.clientY };
+      } else if (e.type === "scroll") {
+        extraData = { scroll_x: window.scrollX, scroll_y: window.scrollY };
+      } else if (e.type === "keydown") {
+        extraData = {
+          key: e.key,
+          code: e.code,
+          modifiers: {
+            ctrl: e.ctrlKey,
+            alt: e.altKey,
+            shift: e.shiftKey,
+            meta: e.metaKey,
+          },
+        };
+      } else if (["input", "change", "paste"].includes(e.type)) {
+        extraData.value = e.target.value;
+        extraData.input_type = e.target.type;
+
+        if (e.target.type === "checkbox" || e.target.type === "radio") {
+          extraData.checked = e.target.checked;
+        }
+
+        if (e.target.tagName === "SELECT") {
+          const idx = e.target.selectedIndex;
+          if (idx !== -1) {
+            extraData.selected_text = e.target.options[idx].text;
+          }
+          if (e.target.type === "select-multiple") {
+            extraData.selected_values = Array.from(
+              e.target.selectedOptions
+            ).map((o) => o.value);
+            extraData.selected_texts = Array.from(e.target.selectedOptions).map(
+              (o) => o.text
+            );
+          }
+        }
+      }
+
+      queueEvent({ ...baseData, ...extraData });
+    },
+    { capture: config.capture }
+  );
 });
 
-window.addEventListener("focus", () => {
-  window.recordEvent({ type: "tab_focus" });
-});
+window.addEventListener("beforeunload", flushBuffer);

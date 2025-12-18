@@ -49,35 +49,48 @@ domain_details = [
 ]
 
 
-def get_domain_detail(url):
+def domain_detail(url):
     for domain_detail in domain_details:
         if url == domain_detail["domain"]:
             return domain_detail
 
 
-task_url = "https://raw.githubusercontent.com/web-arena-x/webarena/refs/heads/main/config_files/test.raw.json"
-filename = "tasks.json"
+TASK_URL = "https://raw.githubusercontent.com/web-arena-x/webarena/refs/heads/main/config_files/test.raw.json"
+TASK_FILE = "./tasks.json"
 
 
-print(f"Downloading tasks from {task_url}...")
+def download():
+    print(f"Downloading tasks from {TASK_URL}...")
 
-response = requests.get(task_url)
-response.raise_for_status()
-data = response.json()
+    response = requests.get(TASK_URL)
+    response.raise_for_status()
+    data = response.json()
 
-extracted_tasks = [
-    {
-        "id": task["task_id"],
-        "goal": task["intent"],
-        "domain_detail": get_domain_detail(task["start_url"]),
-    }
-    for task in data
-]
+    extracted_tasks = [
+        {
+            "id": task["task_id"],
+            "goal": task["intent"],
+            "domain_detail": domain_detail(task["start_url"]),
+        }
+        for task in data
+    ]
 
-with open(filename, "w") as f:
-    json.dump(extracted_tasks, f, indent=2)
+    with open(TASK_FILE, "w") as f:
+        json.dump(extracted_tasks, f, indent=2)
 
-print(f"Success! Dumped {len(extracted_tasks)} tasks to '{filename}'.")
+    print(f"Success! Dumped {len(extracted_tasks)} tasks to '{TASK_FILE}'.")
 
-print("\nPreview:")
-print(json.dumps(extracted_tasks[:3], indent=2))
+    print("\nPreview:")
+    print(json.dumps(extracted_tasks[:3], indent=2))
+
+
+def detail(id: int):
+    with open(TASK_FILE, "r") as file:
+        tasks = json.load(file)
+
+    for task in tasks:
+        if task["id"] == id:
+            return task
+
+    print("Goal could not be found.")
+    return None
