@@ -9,9 +9,6 @@ import os
 
 
 WEBEVENT_JS_FILE = "./webevent.js"
-LOG_FILE = "./logs.jsonl"
-
-logger = InteractionLogger(LOG_FILE)
 
 
 def log(event_batch):
@@ -63,6 +60,9 @@ args = parser.parse_args()
 
 task_detail = tasks.detail(args.id)
 assert task_detail is not None
+
+LOG_FILE = f"./interactions/task-{args.id}.jsonl"
+logger = InteractionLogger(LOG_FILE)
 
 print(task_detail["goal"])
 input("Press anything to continue...")
