@@ -1,6 +1,4 @@
-# from event_logger_old import EventLogger
 from interaction_logger import InteractionLogger
-import json
 import time
 from playwright.sync_api import sync_playwright, Page
 import argparse
@@ -13,6 +11,7 @@ WEBEVENT_JS_FILE = "./webevent.js"
 
 def log(event_batch):
     for event in event_batch:
+        event["server_timestamp"] = int(time.time() * 1000)
         logger.write(event)
 
 
@@ -22,14 +21,19 @@ def inject_js(page: Page):
     with open(WEBEVENT_JS_FILE, "r") as file:
         page.add_init_script(file.read())
 
-    page.on(
-        "framenavigated",
-        lambda frame: log(
-            [{"type": "navigation", "url": frame.url, "title": page.title()}]
-        )
-        if frame == page.main_frame
-        else None,
-    )
+    def safe_nav_handler(frame):
+        if frame != page.main_frame:
+            return
+        try:
+            if page.is_closed():
+                return
+            log([{"type": "navigation", "url": frame.url, "title": page.title()}])
+        except Exception:
+            pass
+
+    page._nav_handler = safe_nav_handler
+
+    page.on("framenavigated", safe_nav_handler)
 
 
 def login(page, task):
@@ -61,7 +65,8 @@ args = parser.parse_args()
 task_detail = tasks.detail(args.id)
 assert task_detail is not None
 
-LOG_FILE = f"./interactions/task-{args.id}.jsonl"
+LOG_FILE = f"./logs/task-{args.id}/interactions.jsonl"
+TRACE_FILE = f"./logs/task-{args.id}/trace.zip"
 logger = InteractionLogger(LOG_FILE)
 
 print(task_detail["goal"])
@@ -77,11 +82,38 @@ with sync_playwright() as p:
 
     login(page, task_detail)
 
-    print(f"Tracking started. Saving to {LOG_FILE}")
-    print("Navigate, Scroll, Type, Click. (Press Ctrl+C to stop)")
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+
+    print(f"Tracking started. Saving log to {LOG_FILE}")
+    print(f"Trace will be saved to {TRACE_FILE}")
+    print("Navigate, Scroll, Type, Click.")
 
     page.goto(task_detail["domain_detail"]["start_url"])
 
-    page.wait_for_timeout(99999999)
+    try:
+        input("\n>>> Press Enter here to stop recording and save trace <<< \n")
+    except KeyboardInterrupt:
+        print("\nInterrupted!")
+    finally:
+        print("Stopping tracing...")
 
-logger.close()
+        if "page" in locals() and hasattr(page, "_nav_handler"):
+            try:
+                page.remove_listener("framenavigated", page._nav_handler)
+            except Exception:
+                pass
+
+        try:
+            context.tracing.stop(path=TRACE_FILE)
+            print(f"Trace saved to {TRACE_FILE}")
+        except Exception as e:
+            print(f"Error saving trace: {e}")
+
+        try:
+            context.close()
+            browser.close()
+            logger.close()
+        except Exception:
+            pass
+
+        print("Done.")
