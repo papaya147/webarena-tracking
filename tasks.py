@@ -24,7 +24,7 @@ domain_details = [
     },
     {
         "domain": "__REDDIT__",
-        "start_url": "http://localhost:8080",
+        "start_url": "http://localhost:8080/forums/all",
         "login_url": "http://localhost:8080/login",
         "username_field": "#login-username",
         "username": "MarvelsGrantMan136",
@@ -34,7 +34,7 @@ domain_details = [
     },
     {
         "domain": "__GITLAB__",
-        "start_url": "http://localhost:9001",
+        "start_url": "http://localhost:9001/explore",
         "login_url": "http://localhost:9001/users/sign_in",
         "username_field": "#user_login",
         "username": "byteblaze",
