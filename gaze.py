@@ -1,50 +1,57 @@
 import sys
+import json
+import time
 from unittest.mock import MagicMock
 
-# 1. TRICK PYGAZE: Create a fake pylink module before anything else imports it
 mock_pylink = MagicMock()
 sys.modules["pylink"] = mock_pylink
 
-# 2. SETUP SETTINGS
+
 from pygaze import settings
 
 settings.TRACKERTYPE = "opengaze"
-settings.DISPTYPE = "pygame"  # Use pygame since 'dummy' failed
+settings.DISPTYPE = "pygame"
 settings.DISPSIZE = (1920, 1080)
 settings.FULLSCREEN = False
 
-# 3. NOW IMPORT THE REST
-import time
 from pygaze.display import Display
 from pygaze.eyetracker import EyeTracker
 
-# 4. INITIALIZE
-# This might open a black window, but you can just minimize it.
-disp = Display()
-tracker = EyeTracker(disp)
+MAX_EVENTS = 100
+events = 0
 
-print("Starting Gazepoint data stream...")
-print("Coordinates will appear below. Press Ctrl+C to quit.")
 
-tracker.start_recording()
+def record(GAZE_LOGS_FILE, stop_sig):
+    gaze_file = open(GAZE_LOGS_FILE, "w")
 
-try:
-    while True:
-        # Get the latest gaze position
-        gaze_pos = tracker.sample()
-        
-        if gaze_pos != (-1, -1):
-            # Print x, y coordinates to the terminal
-            print(f"X: {gaze_pos[0]:<8.2f} Y: {gaze_pos[1]:<8.2f}")
-        
-        # We don't call disp.show() or disp.fill(), 
-        # so the window stays idle/black.
-        time.sleep(0.01)
+    disp = Display()
+    tracker = EyeTracker(disp)
 
-except KeyboardInterrupt:
-    print("\nStopping...")
+    tracker.start_recording()
 
-finally:
-    tracker.stop_recording()
-    tracker.close()
-    disp.close()
+    try:
+        while not stop_sig.is_set():
+            gaze_pos = tracker.sample()
+
+            if gaze_pos != (-1, -1):
+                data = {
+                    "x": gaze_pos[0],
+                    "y": gaze_pos[1],
+                    "timestamp": int(time.time() * 1000),
+                }
+                gaze_file.write(json.dumps(data) + "\n")
+                events += 1
+                if events >= MAX_EVENTS:
+                    gaze_file.flush()
+                    events = 0
+
+            time.sleep(0.01)
+
+    except Exception as e:
+        print(e)
+
+    finally:
+        tracker.stop_recording()
+        tracker.close()
+        disp.close()
+        gaze_file.close()

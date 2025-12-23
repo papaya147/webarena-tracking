@@ -78,15 +78,33 @@ const buildEventData = (e, overrideType = null) => {
 
   const eventType = overrideType || e.type;
 
+  const target_text =
+    e.target.innerText ||
+    e.target.value ||
+    e.target.getAttribute("aria-label") ||
+    "";
+  const rect = e.target.getBoundingClientRect();
+
   const baseData = {
     type: eventType,
     url: window.location.href,
     title: document.title,
-    client_timestamp: Date.now(),
+    timestamp: Date.now(),
+    viewport_width: window.innerWidth,
+    viewport_height: window.innerHeight,
+    page_width: document.documentElement.scrollWidth,
+    page_height: document.documentElement.scrollHeight,
     cursor: cursor,
     target_tag: targetElement ? targetElement.tagName : "",
     target_id: targetElement ? targetElement.id : "",
     target_xpath: getXPath(targetElement),
+    targer_text: target_text,
+    bounding_box: {
+      x: rect.x + window.scrollX,
+      y: rect.y + window.scrollY,
+      width: rect.width,
+      height: rect.height,
+    },
   };
 
   let extraData = {};

@@ -60,8 +60,6 @@ TASK_FILE = "./tasks.json"
 
 
 def download():
-    print(f"Downloading tasks from {TASK_URL}...")
-
     response = requests.get(TASK_URL)
     response.raise_for_status()
     data = response.json()
@@ -77,8 +75,6 @@ def download():
 
     with open(TASK_FILE, "w") as f:
         json.dump(extracted_tasks, f, indent=2)
-
-    print(f"Success! Dumped {len(extracted_tasks)} tasks to '{TASK_FILE}'.")
 
 
 def detail(id: int):
