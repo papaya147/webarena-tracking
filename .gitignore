@@ -2,3 +2,4 @@ tasks.json
 .venv
 __pycache__
 logs
+default*

@@ -1,52 +1,50 @@
-import pygaze
-import pygame
+import sys
+from unittest.mock import MagicMock
+
+# 1. TRICK PYGAZE: Create a fake pylink module before anything else imports it
+mock_pylink = MagicMock()
+sys.modules["pylink"] = mock_pylink
+
+# 2. SETUP SETTINGS
+from pygaze import settings
+
+settings.TRACKERTYPE = "opengaze"
+settings.DISPTYPE = "pygame"  # Use pygame since 'dummy' failed
+settings.DISPSIZE = (1920, 1080)
+settings.FULLSCREEN = False
+
+# 3. NOW IMPORT THE REST
+import time
 from pygaze.display import Display
 from pygaze.eyetracker import EyeTracker
-import pygaze.libtime as timer
 
-SHOW_DOT = True
-DOT_COLOR = (0, 255, 0)
-BG_COLOR = (20, 20, 20)
+# 4. INITIALIZE
+# This might open a black window, but you can just minimize it.
+disp = Display()
+tracker = EyeTracker(disp)
 
-
-class DisplaySettings:
-    DISPTYPE = "pygame"
-    FULLSCREEN = False
-    TRACKERTYPE = "opengaze"
-    DISPSIZE = (1280, 720)
-
-
-pygaze.settings = DisplaySettings()
-
-disp = Display(dispsize=(1280, 720), fgc=DOT_COLOR, bgc=BG_COLOR)
-tracker = EyeTracker(display=disp)
-
+print("Starting Gazepoint data stream...")
+print("Coordinates will appear below. Press Ctrl+C to quit.")
 
 tracker.start_recording()
-print("Press 'ESC' to quit.")
 
-t0 = timer.get_time()
+try:
+    while True:
+        # Get the latest gaze position
+        gaze_pos = tracker.sample()
+        
+        if gaze_pos != (-1, -1):
+            # Print x, y coordinates to the terminal
+            print(f"X: {gaze_pos[0]:<8.2f} Y: {gaze_pos[1]:<8.2f}")
+        
+        # We don't call disp.show() or disp.fill(), 
+        # so the window stays idle/black.
+        time.sleep(0.01)
 
-running = True
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            running = False
+except KeyboardInterrupt:
+    print("\nStopping...")
 
-    gaze_pos = tracker.sample()
-
-    disp.fill()
-
-    if SHOW_DOT and gaze_pos != (-1, -1):
-        pygame.draw.circle(
-            disp.screen,
-            DOT_COLOR,
-            (int(gaze_pos[0]), int(gaze_pos[1])),
-            15,
-        )
-
-    disp.show()
-
-tracker.stop_recording()
-tracker.close()
-disp.close()
+finally:
+    tracker.stop_recording()
+    tracker.close()
+    disp.close()
