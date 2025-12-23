@@ -3,7 +3,7 @@ const MAX_BATCH_SIZE = 50;
 const HOVER_THRESHOLD_MS = 250;
 
 const EVENT_CONFIG = {
-  // mousemove: { capture: true },
+  mousemove: { capture: true },
   scroll: { capture: true },
   resize: { capture: true },
   click: { capture: true },
