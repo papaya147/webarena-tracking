@@ -69,6 +69,7 @@ def download():
             "id": task["task_id"],
             "goal": task["intent"],
             "domain_detail": domain_detail(task["start_url"]),
+            "eval": task["eval"],
         }
         for task in data
     ]
