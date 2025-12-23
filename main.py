@@ -82,7 +82,7 @@ if __name__ == "__main__":
                             "type": "navigation",
                             "url": frame.url,
                             "title": page.title(),
-                            "timestamp": int(time.time * 1000),
+                            "timestamp": int(time.time() * 1000),
                         }
                     ]
                 )

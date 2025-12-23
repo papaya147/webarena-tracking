@@ -81,9 +81,21 @@ const buildEventData = (e, overrideType = null) => {
   const target_text =
     e.target.innerText ||
     e.target.value ||
-    e.target.getAttribute("aria-label") ||
+    (e.target.getAttribute && e.target.getAttribute("aria-label")) ||
     "";
-  const rect = e.target.getBoundingClientRect();
+
+  let rect = { x: 0, y: 0, width: 0, height: 0 };
+  if (e.target && typeof e.target.getBoundingClientRect === "function") {
+    rect = e.target.getBoundingClientRect();
+  } else if (e.target === document) {
+    // If target is document, use the viewport dimensions
+    rect = {
+      x: 0,
+      y: 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+  }
 
   const baseData = {
     type: eventType,
@@ -98,13 +110,8 @@ const buildEventData = (e, overrideType = null) => {
     target_tag: targetElement ? targetElement.tagName : "",
     target_id: targetElement ? targetElement.id : "",
     target_xpath: getXPath(targetElement),
-    targer_text: target_text,
-    bounding_box: {
-      x: rect.x + window.scrollX,
-      y: rect.y + window.scrollY,
-      width: rect.width,
-      height: rect.height,
-    },
+    target_text: target_text,
+    bounding_box: rect,
   };
 
   let extraData = {};
